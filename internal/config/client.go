@@ -150,10 +150,10 @@ func validateDeploymentID(id string) error {
 		return errors.New("script_keys value contains whitespace — paste the Deployment ID without spaces or line breaks")
 	}
 	if !strings.HasPrefix(id, "AKfycb") {
-		return errors.New("Apps Script Deployment IDs start with 'AKfycb'. You may have pasted the script ID (from the editor) instead of the Deployment ID. After deploying, open Deploy → Manage deployments and copy the ID from the Web App URL")
+		return errors.New("deployment IDs start with 'AKfycb' — you may have pasted the script ID (from the editor) instead of the Deployment ID. After deploying, open Deploy → Manage deployments and copy the ID from the Web App URL")
 	}
 	if len(id) < 50 {
-		return fmt.Errorf("Deployment ID looks too short (%d chars; expected ~70). It may be truncated — re-copy from Deploy → Manage deployments", len(id))
+		return fmt.Errorf("deployment ID looks too short (%d chars; expected ~70) — it may be truncated, re-copy from Deploy → Manage deployments", len(id))
 	}
 	return nil
 }

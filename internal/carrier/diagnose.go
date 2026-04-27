@@ -43,11 +43,11 @@ func (c *Client) Diagnose(ctx context.Context) error {
 	_ = getResp.Body.Close()
 
 	if getResp.StatusCode == http.StatusNotFound {
-		return fmt.Errorf("Apps Script returned HTTP 404 for deployment %s.\n  The Deployment ID in script_keys is wrong, the deployment was deleted, or the Web App was never published. Re-deploy with Deploy → New deployment, then update script_keys", shortScriptKey(scriptURL))
+		return fmt.Errorf("deployment %s returned HTTP 404 — the Deployment ID in script_keys is wrong, the deployment was deleted, or the Web App was never published. Re-deploy with Deploy → New deployment, then update script_keys", shortScriptKey(scriptURL))
 	}
 	if !bytes.Contains(getBody, []byte("GooseRelay")) {
 		if bytes.Contains(bytes.ToLower(getBody), []byte("<html")) {
-			return fmt.Errorf("Apps Script deployment %s is not public (returned HTML, not the forwarder).\n  Fix: Deploy → Manage deployments → edit → set 'Who has access' to 'Anyone' and re-deploy", shortScriptKey(scriptURL))
+			return fmt.Errorf("deployment %s is not public (Apps Script returned HTML instead of the forwarder).\n  Fix: Deploy → Manage deployments → edit → set 'Who has access' to 'Anyone' and re-deploy", shortScriptKey(scriptURL))
 		}
 		return fmt.Errorf("unexpected response from Apps Script %s (HTTP %d): %s", shortScriptKey(scriptURL), getResp.StatusCode, snippet(getBody))
 	}
@@ -76,7 +76,7 @@ func (c *Client) Diagnose(ctx context.Context) error {
 		return fmt.Errorf("VPS server rejected our probe (HTTP 204).\n  Most likely cause: AES key mismatch. The tunnel_key in client_config.json must be byte-identical to the one in server_config.json on the VPS")
 	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
 		if bytes.Contains(bytes.ToLower(respBody), []byte("<html")) {
-			return fmt.Errorf("Apps Script cannot reach your VPS (HTTP %d, HTML error page).\n  Fix: confirm VPS_URL in Code.gs points to your VPS, that goose-server is running, and that the port is reachable from Google (try: curl http://YOUR.VPS.IP:8443/healthz from a different network)", postResp.StatusCode)
+			return fmt.Errorf("VPS unreachable from Apps Script (HTTP %d, HTML error page).\n  Fix: confirm VPS_URL in Code.gs points to your VPS, that goose-server is running, and that the port is reachable from Google (try: curl http://YOUR.VPS.IP:8443/healthz from a different network)", postResp.StatusCode)
 		}
 		return fmt.Errorf("HTTP %d from Apps Script — VPS may be unreachable: %s", postResp.StatusCode, snippet(respBody))
 	default:
