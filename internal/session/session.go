@@ -9,6 +9,7 @@ package session
 
 import (
 	"sync"
+	"time"
 
 	"github.com/kianmhz/GooseRelayVPN/internal/frame"
 )
@@ -16,6 +17,13 @@ import (
 // TxBufHighWater is the soft ceiling on the per-session tx buffer; EnqueueTx
 // blocks once exceeded so a fast SOCKS5 writer can't cause unbounded growth.
 const TxBufHighWater = 8 * 1024 * 1024
+
+// sessionFinalTimeout is the maximum time to wait for the peer's FIN after
+// we have sent ours. If the peer's FIN frame is lost (e.g. dropped poll
+// response), the session would stay in the map forever without this timeout,
+// causing the session table to grow unboundedly and the poll loop to slow
+// down over time as it iterates more and more dead sessions.
+const sessionFinalTimeout = 30 * time.Second
 
 // Session is one logical TCP connection across the relay.
 type Session struct {
@@ -32,7 +40,8 @@ type Session struct {
 	synNeeded bool // first outgoing frame must carry SYN+Target
 	closeReq  bool // VirtualConn.Close() called; FIN must be sent on next drain
 	finSent   bool
-	rxClosed  bool // RxChan has been closed (peer FIN received)
+	finSentAt time.Time // when finSent was set; used for orphan reaping
+	rxClosed  bool      // RxChan has been closed (peer FIN received)
 
 	RxChan chan []byte
 
@@ -106,12 +115,22 @@ func (s *Session) HasPendingTx() bool {
 	return s.synNeeded || len(s.txBuf) > 0 || (s.closeReq && !s.finSent)
 }
 
-// IsDone reports whether both FIN frames (sent and received) have flowed.
-// The carrier uses this to garbage-collect finished sessions from its map.
+// IsDone reports whether both FIN frames (sent and received) have flowed,
+// OR whether we sent our FIN but the peer's FIN never arrived within
+// sessionFinalTimeout. The timeout prevents orphaned sessions from accumulating
+// in the carrier's session map when a relay response carrying the peer's FIN
+// is dropped.
 func (s *Session) IsDone() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.finSent && s.rxClosed
+	if s.finSent && s.rxClosed {
+		return true
+	}
+	// Reap orphaned sessions: we sent our FIN but never received the peer's.
+	if s.finSent && !s.finSentAt.IsZero() && time.Since(s.finSentAt) > sessionFinalTimeout {
+		return true
+	}
+	return false
 }
 
 // DrainTx removes pending tx bytes and returns them as a sequence of frames,
@@ -207,6 +226,7 @@ func (s *Session) drainTx(maxPayload, maxFrames int) []*frame.Frame {
 		})
 		s.txSeq++
 		s.finSent = true
+		s.finSentAt = time.Now()
 	}
 
 	s.txCond.Broadcast() // wake any backpressured writers
