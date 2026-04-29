@@ -1,7 +1,6 @@
 {
   "server_host": "0.0.0.0",
   "server_port": 8443,
-  "tunnel_key": "SAME_VALUE_AS_CLIENT_tunnel_key",
-  "upstream_proxy": "OPTIONAL_socks5://127.0.0.1:40000",
+  "tunnel_key": "391401d44265029d6006938f35e550600a4c3dc4bed5d7ddd389844767af8ae6",
   "debug_timing": false
 }
